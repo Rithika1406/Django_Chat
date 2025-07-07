@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chit-Chat - {{ room_name }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 500px;
+            height: 90vh;
+            max-height: 800px;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: #075e54;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .room-name {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logout-btn {
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #e5ddd5;
+            background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+            background-repeat: repeat;
+        }
+
+        .message {
+            max-width: 70%;
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            border-radius: 7.5px;
+            position: relative;
+            word-wrap: break-word;
+            clear: both;
+        }
+
+        .message.sent {
+            background-color: #dcf8c6;
+            float: right;
+            margin-right: 10px;
+        }
+
+        .message.received {
+            background-color: white;
+            float: left;
+            margin-left: 10px;
+        }
+
+        .message-username {
+            font-weight: bold;
+            font-size: 12px;
+            color: #075e54;
+            margin-bottom: 3px;
+        }
+
+        .message-text {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #666;
+            text-align: right;
+            margin-top: 3px;
+        }
+
+        .input-container {
+            display: flex;
+            padding: 10px;
+            background-color: #f0f2f5;
+            border-top: 1px solid #ddd;
+        }
+
+        #id_message_send_input {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        #id_message_send_button {
+            background-color: #075e54;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        /* Scrollbar styling */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div>
+                <h1>Chit-Chat <i class="fas fa-comment"></i></h1>
+                <div class="room-name">Room: {{ room_name }}</div>
+            </div>
+            <div class="user-info">
+                <span>{{ request.user.username|title }}</span>
+                <button class="logout-btn" onclick="window.location.href='{% url 'logout-user' %}'">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="messages-container" id="id_chat_item_container">
+            {% for msg in chat_messages %}
+                <div class="message {% if msg.user == request.user %}sent{% else %}received{% endif %}">
+                    {% if msg.user != request.user %}
+                        <div class="message-username">{{ msg.user.username|title }}</div>
+                    {% endif %}
+                    <div class="message-text">{{ msg.message }}</div>
+                    <div class="message-time">
+                        {{ msg.timestamp|time:"H:i" }}
+                        {% if msg.user == request.user %}
+                            <i class="fas fa-check-double" style="margin-left: 3px;"></i>
+                        {% endif %}
+                    </div>
+                </div>
+            {% empty %}
+                <div class="empty-state">
+                    No messages yet. Start the conversation!
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="input-container">
+            <input type="text" id="id_message_send_input" placeholder="Type a message..." autocomplete="off" />
+            <button id="id_message_send_button">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const roomName = "{{ room_name }}";
+        const currentUser = "{{ request.user.username }}";
+        const chatSocket = new WebSocket(`ws://${window.location.host}/ws/chat/${roomName}/`);
+
+        // Scroll to bottom initially
+        const messagesContainer = document.getElementById('id_chat_item_container');
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        chatSocket.onopen = function(e) {
+            console.log("Successfully connected to the chat room:", roomName);
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error("Chat socket closed unexpectedly");
+        };
+
+        // Handle message input
+        document.querySelector("#id_message_send_input").focus();
+        document.querySelector("#id_message_send_input").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        document.querySelector("#id_message_send_button").addEventListener("click", sendMessage);
+
+        function sendMessage() {
+            const messageInput = document.querySelector("#id_message_send_input");
+            const message = messageInput.value.trim();
+            
+            if (message) {
+                const currentTime = new Date();
+                const timeString = currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                chatSocket.send(JSON.stringify({
+                    message: message,
+                    username: currentUser,
+                    time: timeString
+                }));
+                
+                messageInput.value = "";
+            }
+        }
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const isCurrentUser = data.username === currentUser;
+            
+            // Create message element
+            const messageElement = document.createElement("div");
+            messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
+            
+            if (!isCurrentUser) {
+                const usernameElement = document.createElement("div");
+                usernameElement.className = "message-username";
+                usernameElement.textContent = data.username.charAt(0).toUpperCase() + data.username.slice(1);
+                messageElement.appendChild(usernameElement);
+            }
+            
+            const textElement = document.createElement("div");
+            textElement.className = "message-text";
+            textElement.textContent = data.message;
+            messageElement.appendChild(textElement);
+            
+            const timeElement = document.createElement("div");
+            timeElement.className = "message-time";
+            timeElement.textContent = data.time;
+            if (isCurrentUser) {
+                timeElement.innerHTML += ' <i class="fas fa-check-double" style="margin-left: 3px;"></i>';
+            }
+            messageElement.appendChild(timeElement);
+            
+            // Add to container
+            const container = document.getElementById('id_chat_item_container');
+            
+            // Remove empty state if it exists
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                container.removeChild(emptyState);
+            }
+            
+            container.appendChild(messageElement);
+            container.scrollTop = container.scrollHeight;
+        };
+    </script>
+</body>
+</html>
